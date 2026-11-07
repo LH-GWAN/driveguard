@@ -5,6 +5,7 @@ import ai.pleos.playground.location.fused.listener.FusedLocationListener
 import ai.pleos.playground.location.fused.model.LocationData
 import ai.pleos.playground.vehicle.Vehicle
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -72,12 +73,28 @@ class RescueService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        val foreground = runCatching {
+            startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        }
+        if (foreground.isFailure) {
+            // 프로세스가 죽은 뒤 시스템이 다시 시작할 때 거부될 수 있다. 그때는 운전자 확인부터 다시 한다.
+            Log.i(TAG, "foreground refused ${foreground.exceptionOrNull()?.javaClass?.simpleName}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (!created) {
             created = true
+            logLastExit()
             begin()
         }
-        return START_NOT_STICKY
+        return START_STICKY
+    }
+
+    /** 서비스가 중간에 사라진 원인을 찾기 위한 기록. 이유 코드만 남긴다. */
+    private fun logLastExit() {
+        val manager = getSystemService(ActivityManager::class.java)
+        val last = runCatching { manager.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull() }.getOrNull() ?: return
+        Log.i(TAG, "last exit reason=${last.reason} status=${last.status}")
     }
 
     private fun begin() {

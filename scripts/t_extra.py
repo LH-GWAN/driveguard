@@ -6,10 +6,9 @@ from h import *
 WORDS = ['심장', '가상의 약', '000-0000', '가족 B', '운전자 A', '글러브박스']
 session(); adb('shell', 'input', 'keyevent', '224')
 print('== 앱 폴더 평문 검색')
-out = adb('shell', 'run-as', PKG, '--user', '10', 'sh', '-c', 'cd /data/user/10/kr.driveguard && find . -type f | while read f; do echo "F $f"; done; grep -rl -e 심장 -e 000-0000 -e "운전자 A" -e 글러브박스 . ; echo done')
-print(out[:900])
-blob = adb('shell', 'run-as', PKG, '--user', '10', 'sh', '-c', 'od -c /data/user/10/kr.driveguard/no_backup/profile.enc | head -2')
-print(blob[:200])
+cmd = 'cd /data/user/10/kr.driveguard; find . -type f | head -40; echo --; grep -rl -e 심장 -e 000-0000 -e 운전자 -e 글러브박스 . ; echo done'
+print(adb('shell', f"run-as {PKG} --user 10 sh -c '{cmd}'")[:1200])
+print(adb('shell', f"run-as {PKG} --user 10 sh -c 'od -c no_backup/profile.enc | head -2'")[:240])
 print('== logcat 평문 검색')
 x = adb('logcat', '-d')
 print({w_: sum(1 for l in x.splitlines() if w_ in l) for w_ in WORDS})
