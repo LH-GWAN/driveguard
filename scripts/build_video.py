@@ -1,5 +1,5 @@
 """녹화 조각과 자막으로 영상을 만든다. 사용: build_video.py <작업폴더> <출력폴더>
-음악과 외부 소재를 넣지 않는다. 화면을 줄여 위아래 띠에 자막을 넣어 앱 화면을 가리지 않는다."""
+음악과 외부 소재를 넣지 않는다. 소리는 녹화에 담긴 앱 음성뿐이다. 화면을 줄여 위아래 띠에 자막을 넣어 앱 화면을 가리지 않는다."""
 import json, os, re, subprocess, sys
 
 V, O = sys.argv[1], sys.argv[2]
@@ -88,7 +88,12 @@ for it in items:
         ev += dia(0, dur, 'Top', '{\\pos(960,17)}' + TOP)
     open(a, 'w', encoding='utf-8').write(HEAD + ev)
     vf = f'fps=30,ass={a}' if kind == 'card' else f'scale=1680:945:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:35:color=0x101418,fps=30,ass={a}'
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', *inp, '-t', str(dur), '-an', '-map_metadata', '-1', '-vf', vf, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-video_track_timescale', '30000', m], check=True)
+    # 소리는 에뮬레이터 녹화에 담긴 앱 음성뿐이다. 카드와 정지 화면은 무음을 넣어 이어 붙인다.
+    if kind == 'clip':
+        audio = ['-map', '0:v:0', '-map', '0:a:0', '-af', 'volume=14dB,alimiter=limit=0.9,aresample=48000,apad']
+    else:
+        audio = ['-f', 'lavfi', '-t', str(dur), '-i', 'anullsrc=r=48000:cl=stereo', '-map', '0:v:0', '-map', '1:a:0']
+    subprocess.run(['ffmpeg', '-v', 'error', '-y', *inp, *audio, '-t', str(dur), '-map_metadata', '-1', '-vf', vf, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-video_track_timescale', '30000', '-c:a', 'aac', '-b:a', '128k', '-ac', '2', m], check=True)
     parts.append(m)
     T += duration(m)
 lst = os.path.join(OUT, 'list.txt')
