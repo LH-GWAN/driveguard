@@ -165,12 +165,141 @@ class RescueStateMachineTest {
         assertFalse(Effect.UnlockDoors in m.advance(60_000))
     }
 
-    @Test fun `고지 중 기어가 다시 빠지면 취소한다`() {
+    @Test fun `고지 중 기어가 다시 빠지면 잠금을 풀지 않고 앞 단계로 돌아간다`() {
         val m = machine()
         m.toAlerted()
         m.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
-        m.go(RescueEvent.Vehicle(stoppedInDrive, RescueStateMachine.CONTROL_GEAR))
+        val effects = m.go(RescueEvent.Vehicle(stoppedInDrive, RescueStateMachine.CONTROL_GEAR))
+        assertEquals(RescueState.ALERTED, m.state)
+        assertFalse(effects.any { it is Effect.Alert })
+        assertFalse(Effect.UnlockDoors in m.advance(30_000))
+    }
+
+    @Test fun `응답 없음 뒤에는 어떤 차량 조작으로도 취소되지 않는다`() {
+        for (control in listOf("steering", "brake", "turn", "gear", "speed")) {
+            val m = machine()
+            m.toAlerted()
+            val effects = m.go(RescueEvent.Vehicle(stoppedInDrive, control))
+            assertEquals(control, RescueState.ALERTED, m.state)
+            assertFalse(control, effects.any { it is Effect.Alert })
+            assertTrue(control, m.guardianNotified)
+        }
+    }
+
+    @Test fun `브레이크를 밟고 기어 P로 넣으면 다음 단계로 간다`() {
+        val m = machine()
+        m.toAlerted()
+        m.go(RescueEvent.Vehicle(stoppedInDrive, "brake"))
+        m.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
+        assertEquals(RescueState.UNLOCK_NOTICE, m.state)
+        m.go(RescueEvent.Vehicle(parked, "brake"))
+        assertEquals(RescueState.UNLOCK_NOTICE, m.state)
+        m.go(RescueEvent.SpeechDone)
+        assertTrue(Effect.UnlockDoors in m.advance(10_000))
+    }
+
+    @Test fun `응답 없음 뒤 조작하면 취소 방법을 음성으로 알리되 자주 반복하지 않는다`() {
+        val m = machine()
+        m.toAlerted()
+        val first = m.go(RescueEvent.Vehicle(stoppedInDrive, "brake"))
+        assertTrue(Effect.Speak(Line.CANCEL_HINT) in first)
+        assertTrue(Effect.StopListen in first)
+        assertFalse(Effect.Speak(Line.CANCEL_HINT) in m.go(RescueEvent.Vehicle(stoppedInDrive, "brake")))
+        now += 20_000
+        assertTrue(Effect.Speak(Line.CANCEL_HINT) in m.go(RescueEvent.Vehicle(stoppedInDrive, "brake")))
+    }
+
+    @Test fun `응답 없음 뒤 괜찮다고 하면 취소 메시지를 보낸다`() {
+        val m = machine()
+        m.toAlerted()
+        val effects = m.go(RescueEvent.VoiceOk)
         assertEquals(RescueState.IDLE, m.state)
+        assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
+    }
+
+    @Test fun `화면 취소는 기어 P일 때만 받는다`() {
+        val inDrive = machine()
+        inDrive.toAlerted()
+        assertTrue(inDrive.go(RescueEvent.UserCancel).isEmpty())
+        assertEquals(RescueState.ALERTED, inDrive.state)
+        val inPark = machine()
+        inPark.toAlerted()
+        inPark.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
+        val effects = inPark.go(RescueEvent.UserCancel)
+        assertEquals(RescueState.IDLE, inPark.state)
+        assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
+    }
+
+    @Test fun `응답 없음 뒤 차가 잠깐 구르면 흐름을 유지한다`() {
+        val m = machine()
+        m.toAlerted()
+        m.go(RescueEvent.Vehicle(driving, "speed"))
+        m.advance(2_999)
+        m.go(RescueEvent.Vehicle(stoppedInDrive, "speed"))
+        m.advance(10_000)
+        assertEquals(RescueState.ALERTED, m.state)
+    }
+
+    @Test fun `응답 없음 뒤 차가 계속 움직이면 흐름을 멈추고 알리되 취소로 보내지 않는다`() {
+        val m = machine()
+        m.toAlerted()
+        m.go(RescueEvent.Vehicle(driving, "speed"))
+        val effects = m.advance(3_000)
+        assertEquals(RescueState.IDLE, m.state)
+        assertTrue(Effect.Speak(Line.MOVING, flush = true) in effects)
+        assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.MOVING })
+        assertFalse(effects.any { it is Effect.Alert && it.kind == AlertKind.CANCEL })
+        assertTrue(m.guardianNotified)
+    }
+
+    @Test fun `움직인 뒤 기어 P로 세우면 다시 묻기 전에는 잠금을 풀지 않는다`() {
+        val m = machine()
+        m.toAlerted()
+        m.go(RescueEvent.Vehicle(driving, "speed"))
+        m.advance(3_000)
+        m.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
+        assertEquals(RescueState.IDLE, m.state)
+        assertFalse(Effect.UnlockDoors in m.advance(120_000))
+    }
+
+    @Test fun `움직인 뒤 다시 멈추고 답이 없으면 처음부터 묻고 창문은 다시 열지 않는다`() {
+        val m = machine()
+        m.toAlerted()
+        m.go(RescueEvent.Vehicle(driving, "speed"))
+        m.advance(3_000)
+        m.go(RescueEvent.Vehicle(stoppedInDrive, "speed"))
+        m.advance(quiet)
+        assertEquals(RescueState.ASK1, m.state)
+        m.go(RescueEvent.SpeechDone)
+        m.advance(10_000)
+        m.go(RescueEvent.SpeechDone)
+        val effects = m.advance(10_000)
+        assertEquals(RescueState.ALERTED, m.state)
+        assertFalse(Effect.OpenWindow in effects)
+        assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.NO_RESPONSE })
+    }
+
+    @Test fun `고지 중이나 구조 단계에서 차가 계속 움직여도 흐름을 멈춘다`() {
+        val notice = machine()
+        notice.toAlerted()
+        notice.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
+        notice.go(RescueEvent.Vehicle(driving, "speed"))
+        assertEquals(RescueState.ALERTED, notice.state)
+        notice.advance(3_000)
+        assertEquals(RescueState.IDLE, notice.state)
+        val rescue = machine()
+        rescue.toRescue()
+        rescue.go(RescueEvent.Vehicle(driving, "speed"))
+        rescue.advance(3_000)
+        assertEquals(RescueState.IDLE, rescue.state)
+    }
+
+    @Test fun `구조 단계에서 괜찮다고 하면 취소 메시지를 보내고 끝낸다`() {
+        val m = machine()
+        m.toRescue()
+        val effects = m.go(RescueEvent.VoiceOk)
+        assertEquals(RescueState.IDLE, m.state)
+        assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
     }
 
     @Test fun `질문 단계의 취소는 아무것도 보내지 않는다`() {
@@ -190,19 +319,19 @@ class RescueStateMachineTest {
     @Test fun `연락 뒤 취소는 취소 메시지를 한 번 보내고 창문을 닫으라고 안내한다`() {
         val m = machine()
         m.toAlerted()
-        val effects = m.go(RescueEvent.Vehicle(stoppedInDrive, "brake"))
+        val effects = m.go(RescueEvent.VoiceOk)
         assertEquals(RescueState.IDLE, m.state)
         assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
         assertTrue(Effect.Speak(Line.CLOSE_WINDOW) in effects)
         assertFalse(m.guardianNotified)
     }
 
-    @Test fun `구조 단계는 차량 조작으로 끝나지 않고 괜찮다는 말로도 끝나지 않는다`() {
+    @Test fun `구조 단계는 차량 조작으로 끝나지 않는다`() {
         val m = machine()
         m.toRescue()
         m.go(RescueEvent.Vehicle(stoppedInDrive, "brake"))
         m.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
-        m.go(RescueEvent.VoiceOk)
+        m.go(RescueEvent.Vehicle(parked, "steering"))
         m.go(RescueEvent.UserCancel)
         assertEquals(RescueState.RESCUE, m.state)
     }

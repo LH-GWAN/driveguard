@@ -26,6 +26,7 @@ data class AlertMessage(
             val body = when (kind) {
                 AlertKind.LOCATION_SHARE -> "운전자가 도움을 요청해 위치를 공유합니다."
                 AlertKind.NO_RESPONSE -> "차가 멈춘 뒤 응답 확인에 답이 없었습니다."
+                AlertKind.MOVING -> "응답 확인에 답이 없던 차가 다시 움직이고 있습니다. 운전자가 응답한 것인지는 알 수 없습니다."
                 AlertKind.CANCEL -> "앞서 보낸 알림을 취소합니다. 차에서 응답이 있었습니다."
                 AlertKind.ENDED -> "차 안에서 안내를 종료했습니다."
             }
@@ -33,6 +34,6 @@ data class AlertMessage(
             return AlertMessage(kind, location, stoppedAtMillis, "$body$place $NOTICE")
         }
 
-        val LOCATED = setOf(AlertKind.LOCATION_SHARE, AlertKind.NO_RESPONSE)
+        val LOCATED = setOf(AlertKind.LOCATION_SHARE, AlertKind.NO_RESPONSE, AlertKind.MOVING)
     }
 }

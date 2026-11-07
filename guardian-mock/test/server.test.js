@@ -39,6 +39,12 @@ test('sanitize는 모르는 종류와 숫자가 아닌 좌표를 거른다', () 
   assert.deepEqual(sanitize({ kind: 'ENDED', lat: '1', lng: 2, text: 'a' }), { kind: 'ENDED', text: 'a' });
 });
 
+test('차가 움직인다는 알림을 받는다', async () => {
+  assert.equal((await post({ kind: 'MOVING', text: 't' })).status, 201);
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(html, /차가 다시 움직임/);
+});
+
 test('잘못된 요청을 거부한다', async () => {
   assert.equal((await post('not json')).status, 400);
   assert.equal((await post({ kind: 'NOPE' })).status, 400);

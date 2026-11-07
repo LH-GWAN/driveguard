@@ -1,9 +1,10 @@
 import { createServer } from 'node:http';
 
-const KINDS = new Set(['LOCATION_SHARE', 'NO_RESPONSE', 'CANCEL', 'ENDED']);
+const KINDS = new Set(['LOCATION_SHARE', 'NO_RESPONSE', 'MOVING', 'CANCEL', 'ENDED']);
 const LABELS = {
   LOCATION_SHARE: '도움 요청 · 위치 공유',
   NO_RESPONSE: '응답 없음',
+  MOVING: '차가 다시 움직임',
   CANCEL: '취소',
   ENDED: '종료',
 };

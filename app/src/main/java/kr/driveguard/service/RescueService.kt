@@ -147,7 +147,10 @@ class RescueService : Service() {
 
     private fun perform(effect: Effect) {
         when (effect) {
-            is Effect.Speak -> speaker.say(text(effect.line), effect.flush)
+            is Effect.Speak -> {
+                Log.i(TAG, "say ${effect.line.name}")
+                speaker.say(text(effect.line), effect.flush)
+            }
             Effect.Listen -> listener.open()
             Effect.StopListen -> listener.close()
             is Effect.Alert -> sendAlert(effect)
@@ -213,6 +216,8 @@ class RescueService : Service() {
             Line.HELP_GUIDE -> R.string.say_help_guide
             Line.ASK -> R.string.say_ask
             Line.PASSENGER -> R.string.say_passenger
+            Line.CANCEL_HINT -> R.string.say_cancel_hint
+            Line.MOVING -> R.string.say_moving
             Line.UNLOCK_NOTICE -> R.string.say_unlock_notice
             Line.OPEN_APP -> R.string.say_open_app
             Line.CANCELLED -> R.string.say_cancelled

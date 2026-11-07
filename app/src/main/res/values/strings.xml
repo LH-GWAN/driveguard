@@ -9,7 +9,9 @@
     <!-- 음성 문구. 응급 안내 문구는 전문가 검토 전 초안이다. -->
     <string name="say_help_guide">가까운 안전한 곳에 바로 세우세요. 필요하면 119에 전화하세요. 가까운 쉼터를 내비에 설정합니다. 취소하려면 괜찮아요 라고 말하세요.</string>
     <string name="say_ask">괜찮으세요? 괜찮으면 괜찮아요 라고 말해 주세요.</string>
-    <string name="say_passenger">운전자가 응답하지 않습니다. 차가 멈춰 있으면 기어를 P로 넣어 주세요. 확인하고 119에 신고해 주세요.</string>
+    <string name="say_passenger">운전자가 응답하지 않습니다. 차가 멈춰 있으면 기어를 P로 넣어 주세요. 확인하고 119에 신고해 주세요. 운전자가 괜찮으면 괜찮아요 라고 말해 주세요.</string>
+    <string name="say_cancel_hint">안내를 멈추려면 괜찮아요 라고 말해 주세요.</string>
+    <string name="say_moving">차가 움직이고 있어 문 잠금 해제를 멈춥니다. 보호자에게 알립니다. 안전한 곳에 세우세요. 창문이 열려 있으면 닫아 주세요.</string>
     <string name="say_unlock_notice">문 잠금을 해제합니다. 취소하려면 괜찮아요 라고 말하세요.</string>
     <string name="say_open_app">문 잠금을 해제했습니다. 화면에서 앱을 열면 미리 입력한 정보를 볼 수 있습니다.</string>
     <string name="say_cancelled">확인했습니다. 안내를 멈춥니다.</string>
