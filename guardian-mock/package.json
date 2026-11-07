@@ -1,0 +1,12 @@
+{
+  "name": "guardian-mock",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "보호자 전송의 가상 구현. 실제 문자·푸시를 보내지 않는다.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test"
+  }
+}

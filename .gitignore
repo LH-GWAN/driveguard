@@ -1,0 +1,21 @@
+# 비밀값·서명
+*.jks
+*.keystore
+keystore.properties
+local.properties
+.env
+.env.*
+
+# 빌드
+.gradle/
+build/
+.idea/
+*.iml
+.kotlin/
+captures/
+
+# 서버 런타임
+node_modules/
+guardian-mock/data/
+
+.DS_Store
