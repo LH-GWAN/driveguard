@@ -9,6 +9,7 @@ const LABELS = {
   ENDED: '종료',
 };
 const MAX_BODY = 4_096;
+const MAP_PREFIX = 'https://www.openstreetmap.org/?';
 
 const escapeHtml = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -25,7 +26,18 @@ export function sanitize(body) {
     alert.lng = body.lng;
   }
   if (Number.isFinite(body.stoppedAt)) alert.stoppedAt = body.stoppedAt;
+  if (Number.isFinite(body.lastResponseAt)) alert.lastResponseAt = body.lastResponseAt;
+  if (typeof body.map === 'string' && body.map.startsWith(MAP_PREFIX) && body.map.length <= 200) alert.map = body.map;
   return alert;
+}
+
+/** 보호자가 119에 신고할 때 불러 줄 정보. 병력은 받지 않으므로 넣을 수 없다. */
+function renderReport(a, place) {
+  const stopped = a.stoppedAt === undefined ? '알 수 없음' : clock(a.stoppedAt);
+  const last = a.lastResponseAt === undefined ? '알 수 없음' : clock(a.lastResponseAt);
+  return `<div class="r"><h3>119 신고 안내</h3><p>직접 확인할 수 없다면 119에 신고해 주세요. 이 앱은 119에 직접 연결하지 않습니다.</p>
+<p>신고할 때 알려 줄 정보</p><ol><li>차량 위치: ${place}${a.map ? ' (지도 링크 있음)' : ''}</li><li>차가 멈춘 시각: ${stopped}</li>
+<li>마지막으로 응답이나 조작이 있던 시각: ${last}</li><li>차가 멈춘 뒤 응답 확인에 답이 없었다는 자동 메시지를 받았다는 것</li></ol></div>`;
 }
 
 function renderPage(alerts) {
@@ -34,14 +46,17 @@ function renderPage(alerts) {
     .reverse()
     .map((a) => {
       const place = a.lat === undefined ? '위치 없음' : `${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}`;
+      const map = a.map ? ` · <a href="${escapeHtml(a.map)}">지도</a>` : '';
       const stopped = a.stoppedAt === undefined ? '' : `<p>정차 시각 ${clock(a.stoppedAt)}</p>`;
-      return `<li><h2>${LABELS[a.kind]}</h2><p>${escapeHtml(a.text)}</p><p>위치 ${place}</p>${stopped}<p class="t">받은 시각 ${clock(a.receivedAt)}</p></li>`;
+      const report = a.kind === 'NO_RESPONSE' ? renderReport(a, place) : '';
+      return `<li class="${a.kind === 'NO_RESPONSE' ? 'n' : ''}"><h2>${LABELS[a.kind]}</h2><p>${escapeHtml(a.text)}</p><p>위치 ${place}${map}</p>${stopped}${report}<p class="t">받은 시각 ${clock(a.receivedAt)}</p></li>`;
     })
     .join('');
   return `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta http-equiv="refresh" content="2"><title>보호자 화면 (가상)</title>
 <style>body{font:20px system-ui,sans-serif;margin:40px;background:#f5f6f8;color:#16181d}h1{font-size:30px;margin:0}
 .b{color:#b3261e;font-weight:600;margin:6px 0 24px}ul{list-style:none;padding:0}li{background:#fff;border:1px solid #d9dce1;border-radius:10px;padding:16px 22px;margin-bottom:14px}
-h2{font-size:24px;margin:0 0 8px}p{margin:4px 0}.t{color:#5b616b;font-size:17px}</style></head>
+h2{font-size:24px;margin:0 0 8px}p{margin:4px 0}.t{color:#5b616b;font-size:17px}li.n{border:2px solid #b3261e}
+.r{background:#fdecea;border-radius:8px;padding:10px 16px;margin:10px 0}.r h3{margin:0 0 6px;font-size:22px;color:#b3261e}.r ol{margin:6px 0;padding-left:24px}.r li{border:0;padding:2px 0;margin:0;background:none}</style></head>
 <body><h1>보호자 B 화면 (가상)</h1><p class="b">가상 전송입니다. 실제 문자·알림을 보내지 않으며 로컬에서만 동작합니다.</p>
 <ul>${rows || '<li>받은 알림이 없습니다.</li>'}</ul></body></html>`;
 }

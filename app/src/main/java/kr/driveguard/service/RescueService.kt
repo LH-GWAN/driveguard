@@ -132,6 +132,7 @@ class RescueService : Service() {
             when (intent) {
                 VoiceIntent.HELP -> RescueEvent.VoiceHelp
                 VoiceIntent.OK -> RescueEvent.VoiceOk
+                VoiceIntent.CANCEL -> RescueEvent.VoiceCancel
                 VoiceIntent.END -> RescueEvent.VoiceEnd
             },
         )
@@ -169,7 +170,7 @@ class RescueService : Service() {
             guardian.send(AlertMessage.build(effect.kind, null, effect.stoppedAtMillis))
             return
         }
-        withLocation { point -> guardian.send(AlertMessage.build(effect.kind, point, effect.stoppedAtMillis)) }
+        withLocation { point -> guardian.send(AlertMessage.build(effect.kind, point, effect.stoppedAtMillis, effect.lastResponseAtMillis)) }
     }
 
     private fun navigate() {

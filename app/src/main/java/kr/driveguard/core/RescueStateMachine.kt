@@ -27,6 +27,7 @@ sealed interface RescueEvent {
     data class Vehicle(val status: VehicleStatus, val control: String?) : RescueEvent
     data object VoiceHelp : RescueEvent
     data object VoiceOk : RescueEvent
+    data object VoiceCancel : RescueEvent
     data object VoiceEnd : RescueEvent
     data object SpeechDone : RescueEvent
     data object UserHelp : RescueEvent
@@ -38,7 +39,7 @@ sealed interface Effect {
     data class Speak(val line: Line, val flush: Boolean = false) : Effect
     data object Listen : Effect
     data object StopListen : Effect
-    data class Alert(val kind: AlertKind, val stoppedAtMillis: Long?) : Effect
+    data class Alert(val kind: AlertKind, val stoppedAtMillis: Long?, val lastResponseAtMillis: Long? = null) : Effect
     data object NavigateShelter : Effect
     data object OpenWindow : Effect
     data object UnlockDoors : Effect
@@ -55,7 +56,8 @@ sealed interface Effect {
  * 차량 동작을 한다. 잠금 해제와 조명은 ALERTED를 거친 뒤 속도 0이고 기어 P일 때만 일어난다.
  *
  * 질문 단계까지는 조작하면 멈춘다. 응답 없음이 확정된 뒤에는 동승자가 기어를 P로 넣으며 브레이크를 밟을 수 있으므로
- * 차량 조작으로 취소하지 않는다. 취소는 음성 "괜찮아요"와 기어 P에서의 화면 조작뿐이다.
+ * 차량 조작으로 취소하지 않는다. 취소는 음성 "괜찮아 취소해줘"와 기어 P에서의 화면 조작뿐이다. 이 단계에서
+ * "괜찮아요"만으로는 취소하지 않는다. 구조자가 운전자에게 묻는 말일 수 있다.
  * 다만 차가 정해 둔 시간 이상 계속 움직이면 그 정차에 대한 응답 없음은 더 유효하지 않으므로 잠금 해제 흐름을 멈춘다.
  * 운전자가 응답한 것인지 알 수 없어 취소로 처리하지 않고 보호자에게 움직임을 알린 뒤, 다시 멈추면 처음부터 묻는다.
  */
@@ -82,6 +84,7 @@ class RescueStateMachine(private val config: RescueConfig, now: Long) {
         is RescueEvent.Vehicle -> onVehicle(event, now)
         RescueEvent.VoiceHelp, RescueEvent.UserHelp -> onHelp(now)
         RescueEvent.VoiceOk -> onOk(now)
+        RescueEvent.VoiceCancel -> if (state == RescueState.IDLE) emptyList() else cancel(now)
         RescueEvent.VoiceEnd, RescueEvent.UserEnd -> onEnd(now)
         RescueEvent.SpeechDone -> onSpeechDone(now)
         RescueEvent.UserCancel -> onUserCancel(now)
@@ -171,7 +174,11 @@ class RescueStateMachine(private val config: RescueConfig, now: Long) {
         else -> emptyList()
     }
 
-    private fun onOk(now: Long): List<Effect> = if (state == RescueState.IDLE) emptyList() else cancel(now)
+    /** 운전자의 자연스러운 답은 확정 전 단계에서만 받는다. */
+    private fun onOk(now: Long): List<Effect> = when (state) {
+        RescueState.ASK1, RescueState.ASK2, RescueState.REQUESTED -> cancel(now)
+        else -> emptyList()
+    }
 
     private fun onEnd(now: Long): List<Effect> {
         if (state != RescueState.RESCUE) return emptyList()
@@ -216,7 +223,7 @@ class RescueStateMachine(private val config: RescueConfig, now: Long) {
         guardianNotified = true
         speaking = true
         deadline = now + config.speakTimeoutMillis
-        val effects = mutableListOf<Effect>(Effect.Alert(AlertKind.NO_RESPONSE, stoppedAtMillis))
+        val effects = mutableListOf<Effect>(Effect.Alert(AlertKind.NO_RESPONSE, stoppedAtMillis, lastResponseAtMillis))
         if (config.windowEnabled && !windowOpened && status.stopped == true) {
             windowOpened = true
             effects += Effect.OpenWindow

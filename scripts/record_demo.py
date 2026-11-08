@@ -197,7 +197,7 @@ with Scene('s3') as s:
     w(1)
 
 with Scene('s4') as s:
-    s.cap('[음성 출력] "운전자가 응답하지 않습니다. 차가 멈춰 있으면 기어를 P로 넣어 주세요. 확인하고 119에 신고해 주세요. 운전자가 괜찮으면 괜찮아요 라고 말해 주세요."')
+    s.cap('[음성 출력] "운전자가 응답하지 않습니다. 차가 멈춰 있으면 기어를 P로 넣어 주세요. 확인하고 119에 신고해 주세요. 운전자가 괜찮으면 괜찮아 취소해줘 라고 말해 주세요."')
     wait_alert('NO_RESPONSE', 15)
     w(8)
     v = view()
@@ -216,7 +216,7 @@ with Scene('s5') as s:
     put('/vehicle/controls?speed=0&accelerator=0&brake=40&steering=0')
     facts['brake_at'] = round(time.time() - s.t0, 2)
     w(0.2)
-    s.cap('[음성 출력] "안내를 멈추려면 괜찮아요 라고 말해 주세요." 깨어난 운전자도 말로 취소합니다 (기어 P에서는 화면도 가능)')
+    s.cap('[음성 출력] "안내를 멈추려면 괜찮아 취소해줘 라고 말해 주세요." 이 단계는 이 문구로만 취소합니다 (기어 P에서는 화면도 가능)')
     w(5)
     if logs('ALERTED -> IDLE'):
         raise SystemExit('브레이크로 취소됨')
@@ -224,7 +224,7 @@ with Scene('s5') as s:
     w(2)
     put('/vehicle/gear?gear=Park')
     wait_or_stop('ALERTED -> UNLOCK_NOTICE', 10)
-    s.cap('[음성 출력] "문 잠금을 해제합니다. 취소하려면 괜찮아요 라고 말하세요." 짧은 취소 시간을 둡니다')
+    s.cap('[음성 출력] "문 잠금을 해제합니다. 취소하려면 괜찮아 취소해줘 라고 말하세요." 짧은 취소 시간을 둡니다')
     wait_or_stop('UNLOCK_NOTICE -> RESCUE', 40)
     put('/vehicle/controls?speed=0&accelerator=0&brake=0&steering=0')
     s.cap('[음성 출력] "문 잠금을 해제했습니다. 화면에서 앱을 열면 미리 입력한 정보를 볼 수 있습니다."')
@@ -234,7 +234,8 @@ with Scene('s5') as s:
     s.cap(f"[실제 SDK] 문 잠금 해제, 실내등, 미등 (콘솔 값: 잠금 {'해제' if not v['locked'] else '유지'}, 실내등 {'켜짐' if v['cabin'] else '꺼짐'}, 미등 {'켜짐' if v['tail'] == 'Position' else '꺼짐'})")
     w(4)
     # 서비스가 화면을 띄우는 동작은 일정하지 않아 실제 결과대로 적는다.
-    shown = h.PKG + '/.ui.MainActivity' in adb('shell', 'dumpsys', 'activity', 'activities').split('ResumedActivity')[1]
+    shown = any(h.PKG + '/.ui.MainActivity' in line for line in adb('shell', 'dumpsys', 'activity', 'activities').splitlines()
+                if 'ResumedActivity' in line)
     s.cap('이번 실행에서는 서비스가 화면을 띄웠습니다. 항상 되지는 않아 앱을 여는 음성 안내가 기본 경로입니다' if shown
           else '동승자가 음성 안내대로 앱을 엽니다 (이 조작은 시험 도구가 대신함)')
     app()
@@ -271,7 +272,7 @@ with Scene('s7') as s:
     s.cap('[시뮬레이션] 운전자의 답 "괜찮아요"를 합성 음성 파일로 입력')
     say('ok')
     wait_or_stop('ASK1 -> IDLE', 12)
-    s.cap('[음성 출력] "확인했습니다. 안내를 멈춥니다." 아무것도 전송하지 않습니다')
+    s.cap('[음성 출력] "취소되었습니다." 질문 단계에서는 "괜찮아요"로 취소됩니다. 아무것도 전송하지 않습니다')
     w(4)
 facts['after_cancel'] = alert_kinds()
 car('park')

@@ -154,11 +154,11 @@ class RescueStateMachineTest {
         assertFalse(Effect.GloveBoxUnlock in machine(glove = false).toRescue())
     }
 
-    @Test fun `고지 중 괜찮다고 하면 잠금을 풀지 않고 취소 메시지를 보낸다`() {
+    @Test fun `고지 중 괜찮아 취소해줘라고 하면 잠금을 풀지 않고 취소 메시지를 보낸다`() {
         val m = machine()
         m.toAlerted()
         m.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
-        val effects = m.go(RescueEvent.VoiceOk)
+        val effects = m.go(RescueEvent.VoiceCancel)
         assertEquals(RescueState.IDLE, m.state)
         assertFalse(Effect.UnlockDoors in effects)
         assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
@@ -209,10 +209,10 @@ class RescueStateMachineTest {
         assertTrue(Effect.Speak(Line.CANCEL_HINT) in m.go(RescueEvent.Vehicle(stoppedInDrive, "brake")))
     }
 
-    @Test fun `응답 없음 뒤 괜찮다고 하면 취소 메시지를 보낸다`() {
+    @Test fun `응답 없음 뒤 괜찮아 취소해줘라고 하면 취소 메시지를 보낸다`() {
         val m = machine()
         m.toAlerted()
-        val effects = m.go(RescueEvent.VoiceOk)
+        val effects = m.go(RescueEvent.VoiceCancel)
         assertEquals(RescueState.IDLE, m.state)
         assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
     }
@@ -294,10 +294,10 @@ class RescueStateMachineTest {
         assertEquals(RescueState.IDLE, rescue.state)
     }
 
-    @Test fun `구조 단계에서 괜찮다고 하면 취소 메시지를 보내고 끝낸다`() {
+    @Test fun `구조 단계에서 괜찮아 취소해줘라고 하면 취소 메시지를 보내고 끝낸다`() {
         val m = machine()
         m.toRescue()
-        val effects = m.go(RescueEvent.VoiceOk)
+        val effects = m.go(RescueEvent.VoiceCancel)
         assertEquals(RescueState.IDLE, m.state)
         assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
     }
@@ -319,7 +319,7 @@ class RescueStateMachineTest {
     @Test fun `연락 뒤 취소는 취소 메시지를 한 번 보내고 창문을 닫으라고 안내한다`() {
         val m = machine()
         m.toAlerted()
-        val effects = m.go(RescueEvent.VoiceOk)
+        val effects = m.go(RescueEvent.VoiceCancel)
         assertEquals(RescueState.IDLE, m.state)
         assertEquals(1, effects.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
         assertTrue(Effect.Speak(Line.CLOSE_WINDOW) in effects)
@@ -396,6 +396,50 @@ class RescueStateMachineTest {
         assertEquals(RescueState.ASK1, m.state)
         val cancel = m.go(RescueEvent.VoiceOk)
         assertEquals(1, cancel.count { it is Effect.Alert && it.kind == AlertKind.CANCEL })
+    }
+
+    @Test fun `응답 없음 확정 뒤에는 괜찮아요만으로 취소되지 않는다`() {
+        val alerted = machine()
+        alerted.toAlerted()
+        assertTrue(alerted.go(RescueEvent.VoiceOk).none { it is Effect.Alert })
+        assertEquals(RescueState.ALERTED, alerted.state)
+        val notice = machine()
+        notice.toAlerted()
+        notice.go(RescueEvent.Vehicle(parked, RescueStateMachine.CONTROL_GEAR))
+        notice.go(RescueEvent.VoiceOk)
+        assertEquals(RescueState.UNLOCK_NOTICE, notice.state)
+        notice.go(RescueEvent.SpeechDone)
+        assertTrue(Effect.UnlockDoors in notice.advance(10_000))
+        notice.go(RescueEvent.VoiceOk)
+        assertEquals(RescueState.RESCUE, notice.state)
+    }
+
+    @Test fun `질문 단계와 도움 요청 직후에는 두 문구 모두 받는다`() {
+        for (voice in listOf(RescueEvent.VoiceOk, RescueEvent.VoiceCancel)) {
+            val ask = machine()
+            ask.toAsk1()
+            ask.go(voice)
+            assertEquals(RescueState.IDLE, ask.state)
+            val requested = machine()
+            requested.go(RescueEvent.VoiceHelp)
+            requested.go(voice)
+            assertEquals(RescueState.IDLE, requested.state)
+        }
+    }
+
+    @Test fun `취소되면 취소되었다고 말한다`() {
+        val m = machine()
+        m.toAlerted()
+        assertTrue(Effect.Speak(Line.CANCELLED, flush = true) in m.go(RescueEvent.VoiceCancel))
+    }
+
+    @Test fun `대기 중의 취소 문구는 무시한다`() = assertTrue(machine().go(RescueEvent.VoiceCancel).isEmpty())
+
+    @Test fun `응답 없음 알림에 마지막 응답 시각을 싣는다`() {
+        val m = machine()
+        val effects = m.toAlerted()
+        val alert = effects.filterIsInstance<Effect.Alert>().single()
+        assertEquals(m.lastResponseAtMillis, alert.lastResponseAtMillis)
     }
 
     @Test fun `질문 중 도움을 요청하면 요청 흐름으로 간다`() {

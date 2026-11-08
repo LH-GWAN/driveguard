@@ -39,6 +39,23 @@ test('sanitize는 모르는 종류와 숫자가 아닌 좌표를 거른다', () 
   assert.deepEqual(sanitize({ kind: 'ENDED', lat: '1', lng: 2, text: 'a' }), { kind: 'ENDED', text: 'a' });
 });
 
+test('응답 없음에는 119 신고 안내와 불러 줄 정보를 보여 준다', async () => {
+  await post({ kind: 'NO_RESPONSE', lat: 37.5, lng: 127, stoppedAt: 1000, lastResponseAt: 500, map: 'https://www.openstreetmap.org/?mlat=37.5&mlon=127', text: 't' });
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(html, /119 신고 안내/);
+  assert.match(html, /119에 직접 연결하지 않습니다/);
+  assert.match(html, /마지막으로 응답이나 조작이 있던 시각/);
+  assert.match(html, /지도 링크 있음/);
+  const [alert] = await (await fetch(`${base}/alerts`)).json();
+  assert.equal(alert.lastResponseAt, 500);
+});
+
+test('다른 주소의 지도 링크는 버린다', async () => {
+  await post({ kind: 'NO_RESPONSE', lat: 1, lng: 2, map: 'https://evil.example/x', text: 't' });
+  const [alert] = await (await fetch(`${base}/alerts`)).json();
+  assert.equal(alert.map, undefined);
+});
+
 test('차가 움직인다는 알림을 받는다', async () => {
   assert.equal((await post({ kind: 'MOVING', text: 't' })).status, 201);
   const html = await (await fetch(`${base}/`)).text();
