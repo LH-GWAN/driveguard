@@ -9,16 +9,16 @@ FONT = 'Apple SD Gothic Neo'
 d = json.load(open(os.path.join(V, sys.argv[3] if len(sys.argv) > 3 else 'timeline.json'), encoding='utf-8'))
 scenes = {s['name']: s for s in d['scenes']}
 items = [
-    ('card', 'title', 5, ['{\\b1\\fs96}DriveGuard', '{\\fs46}차가 멈춘 뒤 응답을 확인하고 보호자와 구조자를 연결하는 앱', '',
+    ('card', 'title', 4, ['{\\b1\\fs96}DriveGuard', '{\\fs46}차가 멈춘 뒤 응답을 확인하고 보호자와 구조자를 연결하는 앱', '',
                           '{\\fs38}시나리오: 심장 질환 이력이 있는 운전자 A, 동승자 C, 보호자 B']),
     ('clip', 's1'), ('clip', 's2'),
-    ('still', 'g1', 4, '보호자 화면: 위치 공유 도착'),
+    ('still', 'g1', 3, '보호자 화면: 위치 공유 도착'),
     ('clip', 's3'), ('clip', 's4'),
-    ('still', 'g2', 6, '보호자 화면: 119 신고 요청과 신고 때 알려 줄 위치·지도·정차 시각·마지막 응답 시각'),
+    ('still', 'g2', 5, '보호자 화면: 119 신고 요청과 신고 때 알려 줄 위치·지도·정차 시각·마지막 응답 시각'),
     ('clip', 's5'), ('clip', 's6'),
-    ('still', 'g3', 4, '보호자 화면: 종료 전달'),
+    ('still', 'g3', 3, '보호자 화면: 종료 전달'),
     ('clip', 's7'),
-    ('card', 'end', 5, ['{\\b1\\fs50}Pleos Connect Emulator에서 시연', '',
+    ('card', 'end', 4, ['{\\b1\\fs50}Pleos Connect Emulator에서 시연', '',
                         '{\\fs38}사용한 SDK: TextToSpeech, SpeechToText, NaviHelper, Vehicle, FusedLocation',
                         '{\\fs38}차량 속성: 기어, 속도 (Android Automotive)']),
 ]
@@ -48,12 +48,36 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 RING = 'm 34 0 b 53 0 68 15 68 34 b 68 53 53 68 34 68 b 15 68 0 53 0 34 b 0 15 15 0 34 0'
 
 
+# 누른 순간의 프레임을 이 시간만큼 멈춰 두고 그 위에만 원을 그린다. 원이 다음 화면에 겹치지 않게 하기 위해서다.
+FREEZE = 0.8
+
+
 def touch(t, px, py):
     x = round(120 + px * 1680 / 2560)
     y = round(35 + py * 945 / 1440)
     style = ('{\\an5\\pos(%d,%d)\\bord6\\shad0\\3c&H00D7FF&\\1c&H00D7FF&\\1a&HB0&\\3a&H10&\\fscx55\\fscy55'
-             '\\t(0,350,\\fscx125\\fscy125)\\t(450,900,\\alpha&HFF&)\\p1}' % (x, y))
-    return f'Dialogue: 1,{ts(max(0, t - 0.05))},{ts(t + 0.9)},Cap,,0,0,0,,{style}{RING}{{\\p0}}\n'
+             '\\t(0,300,\\fscx125\\fscy125)\\t(420,780,\\alpha&HFF&)\\p1}' % (x, y))
+    return f'Dialogue: 1,{ts(t)},{ts(t + FREEZE)},Cap,,0,0,0,,{style}{RING}{{\\p0}}\n'
+
+
+def freeze_graph(cuts, dur, vf):
+    """원본을 누른 시각마다 잘라 그 순간의 프레임을 FREEZE초 동안 멈춘 조각을 끼운다. 멈춘 동안은 무음이다."""
+    n = len(cuts) + 1
+    g = [f'[0:v]fps=30,split={2 * n - 1}' + ''.join(f'[s{i}]' for i in range(2 * n - 1)),
+         f'[0:a]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={dur},asplit={n}' + ''.join(f'[r{i}]' for i in range(n))]
+    order, prev = [], 0.0
+    for i, c in enumerate(cuts + [dur]):
+        g.append(f'[s{2 * i}]trim=start={prev}:end={c},setpts=PTS-STARTPTS[v{i}]')
+        g.append(f'[r{i}]atrim=start={prev}:end={c},asetpts=PTS-STARTPTS[a{i}]')
+        order.append(f'[v{i}][a{i}]')
+        if i < len(cuts):
+            g.append(f'[s{2 * i + 1}]trim=start={c}:duration=0.04,setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={FREEZE},trim=duration={FREEZE}[f{i}]')
+            g.append(f'aevalsrc=0|0:s=48000:d={FREEZE},aformat=channel_layouts=stereo[z{i}]')
+            order.append(f'[f{i}][z{i}]')
+        prev = c
+    g.append(''.join(order) + f'concat=n={len(order)}:v=1:a=1[cv][ca]')
+    g.append('[ca]volume=14dB,alimiter=limit=0.9[aout]')
+    return ';'.join(g)
 
 
 def dia(a, b, st, tx):
@@ -75,7 +99,12 @@ for it in items:
         dur = round(min(s['dur'], duration(src)), 3)
         inp = ['-i', src]
         caps = s['caps']
+        cuts = sorted(t0 for t0, _, _ in s.get('taps', []) if 0 < t0 < dur)
+        # 멈춘 시간만큼 뒤 시각을 민다. 누른 시각에 시작하는 자막은 멈춤이 끝난 뒤에 바뀐다.
+        shift = lambda x: x + FREEZE * sum(1 for c in cuts if c <= x)
         pairs = [(max(0, c[0] - 0.3), min(dur, caps[i + 1][0] - 0.3) if i + 1 < len(caps) else dur, c[1]) for i, c in enumerate(caps)]
+        pairs = [(shift(x), shift(y), t) for x, y, t in pairs]
+        raw_dur, dur = dur, round(dur + FREEZE * len(cuts), 3)
     elif kind == 'still':
         dur = it[2]
         inp = ['-loop', '1', '-t', str(dur), '-i', os.path.join(V, 'stills', name + '.png')]
@@ -91,15 +120,22 @@ for it in items:
         srt.append((T + x, T + y, t))
     if kind == 'clip':
         for t0, px, py in scenes[name].get('taps', []):
-            ev += touch(t0, px, py)
+            if t0 in cuts:
+                ev += touch(t0 + FREEZE * cuts.index(t0), px, py)
     open(a, 'w', encoding='utf-8').write(HEAD + ev)
     vf = f'fps=30,ass={a}' if kind == 'card' else f'scale=1680:945:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:35:color=0x101418,fps=30,ass={a}'
     # 소리는 에뮬레이터 녹화에 담긴 앱 음성뿐이다. 카드와 정지 화면은 무음을 넣어 이어 붙인다.
+    enc = ['-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-video_track_timescale', '30000', '-c:a', 'aac', '-b:a', '128k', '-ac', '2']
     if kind == 'clip':
-        audio = ['-map', '0:v:0', '-map', '0:a:0', '-af', 'volume=14dB,alimiter=limit=0.9,aresample=48000,apad']
+        # 1단계: 멈춤을 끼운 원본을 만든다. 2단계: 자막과 터치 표시를 입힌다. 한 그래프로 하면 자막 시각이 어긋났다.
+        frozen = os.path.join(OUT, name + '_frozen.mp4')
+        graph = freeze_graph(cuts, raw_dur, '')
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', *inp, '-filter_complex', graph, '-map', '[cv]', '-map', '[aout]', '-t', str(dur), '-map_metadata', '-1',
+                        '-c:v', 'libx264', '-preset', 'medium', '-crf', '12', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', frozen], check=True)
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', frozen, '-map', '0:v:0', '-map', '0:a:0', '-t', str(dur), '-map_metadata', '-1', '-vf', vf, *enc, m], check=True)
     else:
         audio = ['-f', 'lavfi', '-t', str(dur), '-i', 'anullsrc=r=48000:cl=stereo', '-map', '0:v:0', '-map', '1:a:0']
-    subprocess.run(['ffmpeg', '-v', 'error', '-y', *inp, *audio, '-t', str(dur), '-map_metadata', '-1', '-vf', vf, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-pix_fmt', 'yuv420p', '-video_track_timescale', '30000', '-c:a', 'aac', '-b:a', '128k', '-ac', '2', m], check=True)
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', *inp, *audio, '-t', str(dur), '-map_metadata', '-1', '-vf', vf, *enc, m], check=True)
     parts.append(m)
     T += duration(m)
 lst = os.path.join(OUT, 'list.txt')
