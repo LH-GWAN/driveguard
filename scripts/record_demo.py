@@ -27,6 +27,7 @@ class Scene:
     def __init__(self, name):
         self.name = name
         self.caps = []
+        self.taps = []
 
     def __enter__(self):
         global cur
@@ -49,7 +50,13 @@ class Scene:
         if not DRY:
             adb('emu', 'screenrecord', 'stop')
         w(2)
-        scenes.append({'name': self.name, 'dur': self.dur, 'caps': self.caps})
+        scenes.append({'name': self.name, 'dur': self.dur, 'caps': self.caps, 'taps': self.taps})
+
+
+def press(x, y):
+    """누른 좌표와 시각을 남겨 영상에 터치 표시를 입힌다. 좌표는 에뮬레이터 화면 기준(2560x1440)이다."""
+    cur.taps.append((round(time.time() - cur.t0, 2), x, y))
+    adb('shell', 'input', 'tap', str(x), str(y))
 
 
 def tap(text):
@@ -59,7 +66,7 @@ def tap(text):
     if not DRY:
         w(0.8)
         x, y = taps[key]
-        adb('shell', 'input', 'tap', str(x), str(y))
+        press(x, y)
         return
     ns = h.nodes()
     ms = [n for n in ns if n[0] == text] or [n for n in ns if text in n[0]]
@@ -73,20 +80,36 @@ def tap(text):
 def allow():
     """권한 대화상자를 차례로 허용한다. 몇 번 나오는지는 --dry에서 정해 저장한다."""
     if DRY:
-        count = 0
+        labels = taps.setdefault(f'{cur.name}:allow_labels', [])
         for _ in range(8):
             names = h.texts()
             name = next((n for n in ['앱 사용 중에만 허용', '허용'] if n in names), None)
             if not name:
                 break
-            count += 1
+            labels.append(next((n for n in names if '허용하시겠습니까' in n), ''))
             tap(name)
             w(2)
         return
-    for k in [k for k in taps if k.startswith(f'{cur.name}:') and '허용' in k and not k.endswith(':names') and k not in seen_allow]:
+    # 권한 대화상자는 빨리 지나가므로 누르기 전에 잠깐 멈추고 무엇을 허용하는지 자막으로 적는다.
+    keys = [k for k in taps if k.startswith(f'{cur.name}:') and '허용' in k and isinstance(taps[k], list)
+            and len(taps[k]) == 2 and isinstance(taps[k][0], int) and k not in seen_allow]
+    labels = taps.get(f'{cur.name}:allow_labels', [])
+    for i, k in enumerate(keys):
         seen_allow.add(k)
-        adb('shell', 'input', 'tap', str(taps[k][0]), str(taps[k][1]))
-        w(1.5)
+        cur.cap(permission_caption(labels[i] if i < len(labels) else ''))
+        w(1.8)
+        press(taps[k][0], taps[k][1])
+        w(1.4)
+
+
+def permission_caption(title):
+    if '위치' in title:
+        return '위치 권한 허용'
+    if '오디오' in title or '녹음' in title:
+        return '마이크 권한 허용'
+    if '알림' in title:
+        return '알림 권한 허용'
+    return '차량 정보 권한 허용'
 
 
 def guardian_shot(name):

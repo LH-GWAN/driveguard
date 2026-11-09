@@ -9,16 +9,16 @@ FONT = 'Apple SD Gothic Neo'
 d = json.load(open(os.path.join(V, sys.argv[3] if len(sys.argv) > 3 else 'timeline.json'), encoding='utf-8'))
 scenes = {s['name']: s for s in d['scenes']}
 items = [
-    ('card', 'title', 6, ['{\\b1\\fs96}DriveGuard', '{\\fs46}차가 멈춘 뒤 응답을 확인하고 보호자와 구조자를 연결하는 앱', '',
+    ('card', 'title', 5, ['{\\b1\\fs96}DriveGuard', '{\\fs46}차가 멈춘 뒤 응답을 확인하고 보호자와 구조자를 연결하는 앱', '',
                           '{\\fs38}시나리오: 심장 질환 이력이 있는 운전자 A, 동승자 C, 보호자 B']),
     ('clip', 's1'), ('clip', 's2'),
     ('still', 'g1', 4, '보호자 화면: 위치 공유 도착'),
     ('clip', 's3'), ('clip', 's4'),
-    ('still', 'g2', 7, '보호자 화면: 119 신고 요청과 신고 때 알려 줄 위치·지도·정차 시각·마지막 응답 시각'),
+    ('still', 'g2', 6, '보호자 화면: 119 신고 요청과 신고 때 알려 줄 위치·지도·정차 시각·마지막 응답 시각'),
     ('clip', 's5'), ('clip', 's6'),
     ('still', 'g3', 4, '보호자 화면: 종료 전달'),
     ('clip', 's7'),
-    ('card', 'end', 7, ['{\\b1\\fs50}Pleos Connect Emulator에서 시연', '',
+    ('card', 'end', 5, ['{\\b1\\fs50}Pleos Connect Emulator에서 시연', '',
                         '{\\fs38}사용한 SDK: TextToSpeech, SpeechToText, NaviHelper, Vehicle, FusedLocation',
                         '{\\fs38}차량 속성: 기어, 속도 (Android Automotive)']),
 ]
@@ -41,6 +41,19 @@ Style: Card,{FONT},40,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,10
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
+
+
+# 터치 표시: 누른 자리에 반투명 원이 커지며 사라진다. 녹화 좌표(2560x1440)를 영상 안의 앱 화면 위치로 옮긴다.
+# 음수 좌표를 쓰면 libass가 가운데를 어긋나게 잡으므로 0~68 범위로 그린다.
+RING = 'm 34 0 b 53 0 68 15 68 34 b 68 53 53 68 34 68 b 15 68 0 53 0 34 b 0 15 15 0 34 0'
+
+
+def touch(t, px, py):
+    x = round(120 + px * 1680 / 2560)
+    y = round(35 + py * 945 / 1440)
+    style = ('{\\an5\\pos(%d,%d)\\bord6\\shad0\\3c&H00D7FF&\\1c&H00D7FF&\\1a&HB0&\\3a&H10&\\fscx55\\fscy55'
+             '\\t(0,350,\\fscx125\\fscy125)\\t(450,900,\\alpha&HFF&)\\p1}' % (x, y))
+    return f'Dialogue: 1,{ts(max(0, t - 0.05))},{ts(t + 0.9)},Cap,,0,0,0,,{style}{RING}{{\\p0}}\n'
 
 
 def dia(a, b, st, tx):
@@ -76,6 +89,9 @@ for it in items:
     for x, y, t in pairs:
         ev += dia(x, y, 'Cap', '{\\pos(960,1030)}' + t)
         srt.append((T + x, T + y, t))
+    if kind == 'clip':
+        for t0, px, py in scenes[name].get('taps', []):
+            ev += touch(t0, px, py)
     open(a, 'w', encoding='utf-8').write(HEAD + ev)
     vf = f'fps=30,ass={a}' if kind == 'card' else f'scale=1680:945:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:35:color=0x101418,fps=30,ass={a}'
     # 소리는 에뮬레이터 녹화에 담긴 앱 음성뿐이다. 카드와 정지 화면은 무음을 넣어 이어 붙인다.
