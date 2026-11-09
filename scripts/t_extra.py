@@ -3,7 +3,7 @@ import sys, os, subprocess
 sys.path.insert(0, os.path.dirname(__file__))
 from h import *
 
-WORDS = ['심장', '가상의 약', '000-0000', '가족 B', '운전자 A', '글러브박스']
+WORDS = ['심장', '약 A', '000-0000', '가족 B', '운전자 A', '글러브박스']
 session(); adb('shell', 'input', 'keyevent', '224')
 print('== 앱 폴더 평문 검색')
 cmd = 'cd /data/user/10/kr.driveguard; find . -type f | head -40; echo --; grep -rl -e 심장 -e 000-0000 -e 운전자 -e 글러브박스 . ; echo done'

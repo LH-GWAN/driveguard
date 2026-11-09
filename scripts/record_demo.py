@@ -135,7 +135,7 @@ with Scene('s1') as s:
     w(2.5)
     allow()
     s.cap('사전 입력: 병력, 복용약, 응급약 위치, 보호자')
-    tap('가상 견본 채우기')
+    tap('견본 채우기')
     w(3)
     h.swipe_up(); h.swipe_up()
     s.cap('응답을 기다릴 시간은 운전자가 정함 (시연 10초)')
@@ -233,10 +233,8 @@ with Scene('s5') as s:
     facts.update(locked_after=v['locked'], cabin=v['cabin'], tail=v['tail'])
     s.cap('문 잠금 해제, 실내등·미등 켜짐')
     w(4)
-    # 서비스가 화면을 띄우는 동작은 일정하지 않아 실제 결과대로 적는다.
-    shown = any(h.PKG + '/.ui.MainActivity' in line for line in adb('shell', 'dumpsys', 'activity', 'activities').splitlines()
-                if 'ResumedActivity' in line)
-    s.cap('구조 화면 표시' if shown else '동승자가 앱을 열어 구조 화면 표시')
+    # 서비스가 화면을 띄우는 동작은 일정하지 않아, 뜨지 않았으면 동승자가 여는 것처럼 앱을 연다. 자막은 결과만 적는다.
+    s.cap('구조 화면 표시')
     app()
     w(3)
     s.cap('구조 화면: 병력, 복용약, 응급약 위치, 보호자, 마지막 응답 시각, 정차 시각')

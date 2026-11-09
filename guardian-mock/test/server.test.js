@@ -43,7 +43,6 @@ test('응답 없음에는 119 신고 안내와 불러 줄 정보를 보여 준�
   await post({ kind: 'NO_RESPONSE', lat: 37.5, lng: 127, stoppedAt: 1000, lastResponseAt: 500, map: 'https://www.openstreetmap.org/?mlat=37.5&mlon=127', text: 't' });
   const html = await (await fetch(`${base}/`)).text();
   assert.match(html, /119 신고 안내/);
-  assert.match(html, /119에 직접 연결하지 않습니다/);
   assert.match(html, /마지막으로 응답이나 조작이 있던 시각/);
   assert.match(html, /지도 링크 있음/);
   const [alert] = await (await fetch(`${base}/alerts`)).json();
@@ -69,10 +68,10 @@ test('잘못된 요청을 거부한다', async () => {
   assert.equal((await fetch(`${base}/nope`)).status, 404);
 });
 
-test('화면에 가상 표시가 있고 문구를 이스케이프한다', async () => {
+test('화면 제목이 있고 문구를 이스케이프한다', async () => {
   await post({ kind: 'CANCEL', text: '<script>a</script>' });
   const html = await (await fetch(`${base}/`)).text();
-  assert.match(html, /가상 전송입니다/);
+  assert.match(html, /<h1>보호자 화면<\/h1>/);
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
 });

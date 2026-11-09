@@ -121,7 +121,6 @@ fun SetupScreen(app: App, canGoBack: Boolean, onDone: () -> Unit) {
 
     Page {
         Title(stringResource(R.string.setup_title))
-        Note(stringResource(R.string.setup_virtual))
         Secondary(stringResource(R.string.setup_sample)) {
             driver = sampleDriver
             history = sampleHistory
@@ -198,7 +197,6 @@ fun HomeScreen(
     Page {
         Title(stringResource(R.string.app_name))
         Note(stringResource(R.string.tagline))
-        Note(stringResource(R.string.virtual_notice))
         if (!view.running) {
             Body(stringResource(R.string.home_off))
             Body(stringResource(R.string.home_confirm_driver, driver))
@@ -237,6 +235,7 @@ fun RescueScreen(app: App, view: RescueView) {
     val unknown = stringResource(R.string.rescue_unknown)
     Page {
         Title(stringResource(R.string.rescue_title))
+        Note(stringResource(R.string.rescue_info))
         Item(stringResource(R.string.rescue_history), profile?.history.orEmpty().ifBlank { unknown })
         Item(stringResource(R.string.rescue_medication), profile?.medication.orEmpty().ifBlank { unknown })
         Item(stringResource(R.string.rescue_medicine_place), medicineLabel(profile).ifBlank { unknown })
@@ -245,7 +244,6 @@ fun RescueScreen(app: App, view: RescueView) {
         Item(stringResource(R.string.rescue_stopped), view.stoppedAtMillis?.let(::formatTime) ?: unknown)
         Note(stringResource(R.string.rescue_guide_title))
         Body(stringResource(R.string.rescue_guide))
-        Note(stringResource(R.string.virtual_notice))
         Primary(stringResource(R.string.rescue_end)) { app.hub.send(RescueEvent.UserEnd) }
     }
 }

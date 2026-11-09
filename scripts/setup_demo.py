@@ -24,7 +24,7 @@ for t in ['건강 정보(병력', '응답 확인에 답이 없거나', '등록�
     tap(t); w(0.8)
 tap('동의하고 계속'); w(2)
 allow_all()
-tap('가상 견본 채우기'); w(1)
+tap('견본 채우기'); w(1)
 swipe_up(); swipe_up()
 tap('응답 확인까지 기다릴 시간'); w(1)
 adb('shell', 'input', 'keyevent', 'KEYCODE_MOVE_END')

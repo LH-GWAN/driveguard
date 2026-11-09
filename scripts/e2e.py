@@ -74,7 +74,7 @@ swipe_up(); swipe_up(); tap('구조 안내 종료'); w(3)
 t = texts()
 check('종료 후 건강 정보 가림', not any('심장 질환 이력' in x for x in t) and '건강 정보 저장됨 (가려짐)' in t, t)
 check('종료 알림', 'ENDED' in alert_kinds(), alerts())
-check('평문 병력 전송 없음', not any(w_ in json.dumps(alerts(), ensure_ascii=False) for w_ in ['심장', '가상의 약', '글러브', '000-0000']), alerts())
+check('평문 병력 전송 없음', not any(w_ in json.dumps(alerts(), ensure_ascii=False) for w_ in ['심장', '약 A', '글러브', '000-0000']), alerts())
 
 print('== 신호 대기 같은 오탐: 음성으로 취소')
 fresh(); car('stop'); check('ASK1', wait_log('-> ASK1', 25)); w(7); say('ok')

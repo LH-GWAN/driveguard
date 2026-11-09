@@ -82,6 +82,6 @@ t = texts(); check('다시 확인 요구', any('맞습니까' in x for x in t) a
 
 print('프로세스', alive(), '충돌', [l[:100] for l in adb('logcat', '-b', 'crash', '-d').splitlines() if PKG in l][:3])
 x = adb('logcat', '-d')
-print('logcat 평문', {w_: sum(1 for l in x.splitlines() if w_ in l) for w_ in ['심장', '가상의 약', '000-0000', '가족 B', '운전자 A']})
+print('logcat 평문', {w_: sum(1 for l in x.splitlines() if w_ in l) for w_ in ['심장', '약 A', '000-0000', '가족 B', '운전자 A']})
 print('stt 오류', logs('stt error')[:4])
 print('합계', sum(1 for _, o in results if o), '/', len(results), '실패', [n for n, o in results if not o])
