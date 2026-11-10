@@ -2,7 +2,7 @@
 사용: record_demo.py <작업폴더> [--dry]
 화면 덤프가 느려 녹화 중에는 쓰지 않는다. --dry로 한 번 돌려 버튼 좌표를 저장한 뒤 녹화한다.
 보호자 화면은 headless Chrome으로 실제 페이지를 캡처한다."""
-import json, os, subprocess, sys, time
+import json, os, re, subprocess, sys, time
 sys.path.insert(0, os.path.dirname(__file__))
 import h
 from h import adb, alert_kinds, alerts, app, car, clear, logs, navi_front, put, reset_alerts, reset_body, say, session, view, wait_log, w
@@ -53,10 +53,26 @@ class Scene:
         scenes.append({'name': self.name, 'dur': self.dur, 'caps': self.caps, 'taps': self.taps})
 
 
-def press(x, y):
-    """누른 좌표와 시각을 남겨 영상에 터치 표시를 입힌다. 좌표는 에뮬레이터 화면 기준(2560x1440)이다."""
-    cur.taps.append((round(time.time() - cur.t0, 2), x, y))
+# 누르면 상태가 바로 보이는 컨트롤. 영상에서는 바뀐 직후 화면을 멈춰 보여 준다. 나머지는 누른 버튼 영역을 칠한다.
+STATE_CONTROLS = ('건강 정보(병력', '응답 확인에 답이 없거나', '등록할 보호자에게', '응답 확인까지 기다릴 시간')
+
+
+def press(x, y, key):
+    """누른 시각, 좌표, 버튼 경계를 남긴다. 좌표는 에뮬레이터 화면 기준(2560x1440)이다."""
+    kind = 'state' if any(k in key for k in STATE_CONTROLS) else 'press'
+    cur.taps.append({'t': round(time.time() - cur.t0, 2), 'x': x, 'y': y, 'bounds': taps.get(key + ':bounds'), 'kind': kind})
     adb('shell', 'input', 'tap', str(x), str(y))
+
+
+def clickable_bounds(x, y):
+    """방금 덤프한 화면에서 (x, y)를 포함하는 가장 작은 누를 수 있는 요소의 경계."""
+    xml = adb('exec-out', 'cat', '/sdcard/u.xml')
+    best = None
+    for m in re.finditer(r'<node [^>]*?clickable="true"[^>]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml):
+        a, b, c, d = map(int, m.groups())
+        if a <= x <= c and b <= y <= d and (best is None or (c - a) * (d - b) < (best[2] - best[0]) * (best[3] - best[1])):
+            best = [a, b, c, d]
+    return best
 
 
 def tap(text):
@@ -66,7 +82,7 @@ def tap(text):
     if not DRY:
         w(0.8)
         x, y = taps[key]
-        press(x, y)
+        press(x, y, key)
         return
     ns = h.nodes()
     ms = [n for n in ns if n[0] == text] or [n for n in ns if text in n[0]]
@@ -74,6 +90,7 @@ def tap(text):
         raise SystemExit(f'NOT FOUND {text} {[n[0] for n in ns if n[0]][:12]}')
     _, a, b, c, d = ms[0]
     taps[key] = [(a + c) // 2, (b + d) // 2]
+    taps[key + ':bounds'] = clickable_bounds((a + c) // 2, (b + d) // 2)
     adb('shell', 'input', 'tap', str((a + c) // 2), str((b + d) // 2))
 
 
@@ -98,7 +115,7 @@ def allow():
         seen_allow.add(k)
         cur.cap(permission_caption(labels[i] if i < len(labels) else ''))
         w(1.8)
-        press(taps[k][0], taps[k][1])
+        press(taps[k][0], taps[k][1], k)
         w(1.4)
 
 
@@ -197,7 +214,7 @@ with Scene('s2') as s:
     wait_or_stop('-> REQUESTED', 12)
     s.cap('음성 안내: "가까운 안전한 곳에 바로 세우세요. 필요하면 119에 전화하세요..."')
     w(5)
-    s.cap('도움 요청 인식')
+    s.cap('음성 안내: "가까운 쉼터를 내비에 설정합니다. 취소하려면 괜찮아요 라고 말하세요."')
     w(4.5)
     s.cap('가까운 졸음쉼터로 내비 설정')
     wait_alert('LOCATION_SHARE', 30)
@@ -218,8 +235,7 @@ with Scene('s3') as s:
     wait_or_stop('ASK2 -> ALERTED', 30)
     s.cap('두 번 모두 답이 없어 응답 없음으로 판단')
     w(1)
-
-with Scene('s4') as s:
+    # 응답 없음 안내는 판단 직후 바로 시작한다. 장면을 나누면 녹화를 멈췄다 다시 켜는 사이에 대사가 빠지므로 한 장면으로 찍는다.
     s.cap('음성 안내: "운전자가 응답하지 않습니다. 차가 멈춰 있으면 기어를 P로 넣어 주세요. 확인하고 119에 신고해 주세요..."')
     wait_alert('NO_RESPONSE', 15)
     w(8)
@@ -283,9 +299,11 @@ w(1)
 reset_body()
 reset_alerts()
 clear()
+# 기어 변경과 문 상태 초기화에서 나는 차량 효과음이 장면 첫머리에 녹음되지 않게 녹화 전에 바꾸고 기다린다.
+car('stop')
+w(2.5)
 with Scene('s7') as s:
     s.cap('신호 대기로 멈춘 경우: 기어 D, 속도 0, 조작 없음')
-    car('stop')
     wait_or_stop('-> ASK1', 25)
     s.cap('음성 안내: "괜찮으세요?..."')
     w(6)
