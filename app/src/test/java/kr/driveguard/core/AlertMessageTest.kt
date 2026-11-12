@@ -8,8 +8,10 @@ import org.junit.Test
 class AlertMessageTest {
     private val here = GeoPoint(37.5, 127.0)
 
-    @Test fun `모든 종류에 자동 메시지 문구가 들어간다`() {
-        for (k in AlertKind.values()) assertTrue(k.name, AlertMessage.NOTICE in AlertMessage.build(k, here, 1L).text)
+    @Test fun `문구는 종류별 본문뿐이고 덧붙이는 안내 문장이 없다`() {
+        assertEquals("차 안에서 안내를 종료했습니다.", AlertMessage.build(AlertKind.ENDED, here, 1L).text)
+        assertEquals("운전자가 도움을 요청해 위치를 공유합니다.", AlertMessage.build(AlertKind.LOCATION_SHARE, here, 1L).text)
+        for (k in AlertKind.values()) assertFalse(k.name, "자동 메시지" in AlertMessage.build(k, here, 1L).text)
     }
 
     @Test fun `본문 필드는 종류 위치 정차 시각 문구뿐이다`() {

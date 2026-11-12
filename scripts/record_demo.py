@@ -154,6 +154,8 @@ def wait_alert(kind, seconds=25):
 
 
 session()
+# 내비 길 안내 음성이 앱 안내 음성과 겹쳐 대사가 묻히므로 녹화 동안만 내비 음량 그룹(1번)을 0으로 둔다. 끝나면 기본값 20으로 돌린다.
+adb('shell', 'cmd', 'car_service', 'set-group-volume', '0', '1', '0')
 adb('shell', 'input', 'keyevent', '224')
 adb('shell', 'wm', 'dismiss-keyguard')
 car('park')
@@ -316,6 +318,7 @@ facts['after_cancel'] = alert_kinds()
 car('park')
 w(1)
 
+adb('shell', 'cmd', 'car_service', 'set-group-volume', '0', '1', '20')
 if DRY:
     json.dump(taps, open(CACHE, 'w'), ensure_ascii=False, indent=1)
 else:

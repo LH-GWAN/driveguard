@@ -47,6 +47,7 @@ check('무응답 알림', 'NO_RESPONSE' in [x['kind'] for x in a], a)
 check('무응답 알림에 정차 시각', any(x['kind'] == 'NO_RESPONSE' and 'stoppedAt' in x for x in a), a)
 na = [x for x in a if x['kind'] == 'NO_RESPONSE']
 check('무응답 알림에 119 요청·지도·마지막 응답 시각', na and '119에 신고해 주세요' in na[0]['text'] and na[0].get('map', '').startswith('https://www.openstreetmap.org/') and 'lastResponseAt' in na[0], na)
+check('보호자 메시지에 "자동 메시지" 문장 없음', a and all('자동 메시지' not in x['text'] and '진단' not in x['text'] for x in a), a)
 check('창문 열림(Virtual Console)', v1['window'] > v0['window'], v1)
 check('아직 잠금 유지', v1['locked'] is True, v1)
 check('조명 꺼짐 유지', v1['cabin'] is False and v1['tail'] == 'Off', v1)

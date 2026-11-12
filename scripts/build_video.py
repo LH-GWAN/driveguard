@@ -1,6 +1,8 @@
 """녹화 조각과 자막으로 영상을 만든다. 사용: build_video.py <작업폴더> <출력폴더> [timeline 파일 이름]
 음악과 외부 소재를 넣지 않는다. 소리는 녹화에 담긴 앱 음성뿐이다. 화면을 줄여 위아래 띠에 자막을 넣어 앱 화면을 가리지 않는다."""
 import json, os, re, subprocess, sys
+sys.path.insert(0, os.path.dirname(__file__))
+import fix_audio
 
 V, O = sys.argv[1], sys.argv[2]
 OUT = os.path.join(V, 'out')
@@ -115,8 +117,8 @@ def freeze_graph(cuts, dur, vf):
     """원본을 누른 시각마다 잘라 그 순간의 프레임을 FREEZE초 동안 멈춘 조각을 끼운다. 멈춘 동안은 무음이다."""
     n = len(cuts) + 1
     g = [f'[0:v]fps=30,split={2 * n - 1}' + ''.join(f'[s{i}]' for i in range(2 * n - 1)),
-         # 에뮬레이터 녹화의 소리는 소리가 날 때만 기록되어 사이가 비어 있다. 시각대로 무음을 채워야 화면과 맞는다.
-         f'[0:a]aresample=48000:async=1:first_pts=0,aformat=channel_layouts=stereo,apad=whole_dur={dur},asplit={n}' + ''.join(f'[r{i}]' for i in range(n))]
+         # 소리는 fix_audio가 녹화 시각대로 무음을 채우고 끊김을 메운 wav(입력 1)를 쓴다.
+         f'[1:a]aformat=sample_rates=48000:channel_layouts=stereo,apad=whole_dur={dur},asplit={n}' + ''.join(f'[r{i}]' for i in range(n))]
     order, prev = [], 0.0
     for i, c in enumerate(cuts + [dur]):
         g.append(f'[s{2 * i}]trim=start={prev}:end={c},setpts=PTS-STARTPTS[v{i}]')
@@ -128,7 +130,9 @@ def freeze_graph(cuts, dur, vf):
             order.append(f'[f{i}][z{i}]')
         prev = c
     g.append(''.join(order) + f'concat=n={len(order)}:v=1:a=1[cv][ca]')
-    g.append('[ca]volume=14dB,alimiter=limit=0.9[aout]')
+    # 앱 음성은 작게 녹음되어 키운다. 문 잠금 해제음 같은 큰 차량 효과음만 0.5에서 부드럽게 누른다.
+    # alimiter의 자동 레벨(level)은 끈다. 켜 두면 출력을 0dB 가까이 다시 키워 AAC 변환 뒤 1을 넘고 깨진다.
+    g.append('[ca]volume=14dB,alimiter=limit=0.5:level=0:attack=5:release=80[aout]')
     return ';'.join(g)
 
 
@@ -149,7 +153,9 @@ for it in items:
         s = scenes[name]
         src = os.path.join(V, 'clips', name + '.webm')
         dur = round(min(s['dur'], duration(src)), 3)
-        inp = ['-i', src]
+        fixed = os.path.join(OUT, name + '_audio.wav')
+        print(name, '메운 끊김', fix_audio.main(src, fixed), flush=True)
+        inp = ['-i', src, '-i', fixed]
         caps = s['caps']
         # 멈춤 동안은 무음이라 대사 도중에 멈추면 소리가 끊긴다. 대사 중간이면 멈춤을 대사 시작 직전으로 옮긴다.
         spans = speech_spans(src)

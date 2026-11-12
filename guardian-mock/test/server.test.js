@@ -18,7 +18,7 @@ const post = (body) =>
   fetch(`${base}/alerts`, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body) });
 
 test('알림을 저장하고 조회한다', async () => {
-  const res = await post({ kind: 'NO_RESPONSE', lat: 37.5, lng: 127, stoppedAt: 1000, text: '자동 메시지이며 진단이 아닙니다.' });
+  const res = await post({ kind: 'NO_RESPONSE', lat: 37.5, lng: 127, stoppedAt: 1000, text: '운전자가 응답하지 않습니다. 직접 확인할 수 없다면 119에 신고해 주세요.' });
   assert.equal(res.status, 201);
   const list = await (await fetch(`${base}/alerts`)).json();
   assert.equal(list.length, 1);

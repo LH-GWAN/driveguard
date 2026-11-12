@@ -37,6 +37,7 @@ check('ALERTED', wait_log('ASK2 -> ALERTED', 30))
 w(3); v = view()
 check('창문', v['window'] > 0, v)
 check('무응답 전송', 'NO_RESPONSE' in alert_kinds(), alerts())
+check('보호자 메시지에 "자동 메시지" 문장 없음', all('자동 메시지' not in x['text'] and '진단' not in x['text'] for x in alerts()), alerts())
 na = [x for x in alerts() if x['kind'] == 'NO_RESPONSE']
 check('119 요청·지도·마지막 응답 시각', na and '119' in na[0]['text'] and 'map' in na[0] and 'lastResponseAt' in na[0], na)
 check('기어 P 전 제어 없음', v['locked'] is True and v['cabin'] is False and not logs('control (door|cabin|tail|glove)'), v)
