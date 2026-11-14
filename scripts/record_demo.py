@@ -21,6 +21,27 @@ cur = None
 facts = {}
 seen_allow = set()
 CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+# 장면 소리는 에뮬레이터 오디오 출력 캡처에서 가져온다(녹화 소리에는 튐이 섞임). 에뮬레이터를
+# `emulator ... -qemu -monitor telnet:127.0.0.1:<포트>,server,nowait` 로 띄우고 DG_QEMU_MONITOR=<포트>, DG_EMU_WAV=<캡처 파일>을 주면
+# 녹화 동안 QEMU 모니터의 wavcapture로 출력을 파일에 받는다.
+EMU_WAV = os.environ.get('DG_EMU_WAV', '')
+MONITOR = os.environ.get('DG_QEMU_MONITOR', '')
+
+
+def monitor(cmd):
+    import socket
+    with socket.create_connection(('127.0.0.1', int(MONITOR)), timeout=5) as s:
+        time.sleep(0.3)
+        s.recv(4096)
+        s.sendall((cmd + '\n').encode())
+        time.sleep(0.8)
+
+
+if MONITOR and EMU_WAV and not DRY:
+    monitor('stopcapture 0')
+    monitor('wavcapture ' + EMU_WAV)
+    import atexit
+    atexit.register(lambda: monitor('stopcapture 0'))
 
 
 class Scene:
@@ -37,6 +58,7 @@ class Scene:
             os.remove(path)
         if not DRY:
             adb('emu', 'screenrecord', 'start', '--time-limit', '150', '--size', '1920x1080', '--bit-rate', '6000000', '--fps', '30', path)
+        self.wav_from = os.path.getsize(EMU_WAV) if EMU_WAV and os.path.exists(EMU_WAV) else 0
         self.t0 = time.time()
         w(0.5)
         return self
@@ -50,7 +72,7 @@ class Scene:
         if not DRY:
             adb('emu', 'screenrecord', 'stop')
         w(2)
-        scenes.append({'name': self.name, 'dur': self.dur, 'caps': self.caps, 'taps': self.taps})
+        scenes.append({'name': self.name, 'dur': self.dur, 'caps': self.caps, 'taps': self.taps, 'wav_from': self.wav_from})
 
 
 # 누르면 상태가 바로 보이는 컨트롤. 영상에서는 바뀐 직후 화면을 멈춰 보여 준다. 나머지는 누른 버튼 영역을 칠한다.
@@ -120,13 +142,14 @@ def allow():
 
 
 def permission_caption(title):
+    # 시스템 창의 이름과 실제 권한이 다르다. 'CAR_SPEED'는 위치 그룹이라 '위치 정보'로, Pleos 위치 권한은 그룹이 없어 '알 수 없는 작업'으로 뜬다.
     if '위치' in title:
-        return '위치 권한 허용'
+        return '차량 속도 읽기 권한 허용 (시스템 창 이름: 위치 정보)'
     if '오디오' in title or '녹음' in title:
         return '마이크 권한 허용'
     if '알림' in title:
         return '알림 권한 허용'
-    return '차량 정보 권한 허용'
+    return '차량 위치(Pleos 위치 서비스) 권한 허용 (시스템 창 이름: 알 수 없는 작업)'
 
 
 def guardian_shot(name):
@@ -154,8 +177,11 @@ def wait_alert(kind, seconds=25):
 
 
 session()
-# 내비 길 안내 음성이 앱 안내 음성과 겹쳐 대사가 묻히므로 녹화 동안만 내비 음량 그룹(1번)을 0으로 둔다. 끝나면 기본값 20으로 돌린다.
+# 내비 길 안내 음성이 앱 안내 음성과 겹쳐 대사가 묻히므로 녹화 동안만 내비 음량 그룹(1번)을 0으로 둔다. 끝나면 기본값으로 돌린다.
 adb('shell', 'cmd', 'car_service', 'set-group-volume', '0', '1', '0')
+# 중간에 멈춰도 내비 음량은 반드시 되돌린다. 이 명령의 값은 dumpsys의 음량 단계와 눈금이 달라 45를 주면 기본값(20단계)이 된다(에뮬레이터에서 확인).
+import atexit
+atexit.register(lambda: adb('shell', 'cmd', 'car_service', 'set-group-volume', '0', '1', '45'))
 adb('shell', 'input', 'keyevent', '224')
 adb('shell', 'wm', 'dismiss-keyguard')
 car('park')
@@ -174,6 +200,10 @@ with Scene('s1') as s:
     tap('건강 정보(병력'); tap('응답 확인에 답이 없거나'); tap('등록할 보호자에게')
     w(1.5)
     tap('동의하고 계속')
+    w(2)
+    s.cap('권한 안내: 시스템 창마다 무엇을 허용하는지 먼저 설명')
+    w(5)
+    tap('계속')
     w(2.5)
     allow()
     s.cap('사전 입력: 병력, 복용약, 응급약 위치, 보호자')
@@ -318,10 +348,9 @@ facts['after_cancel'] = alert_kinds()
 car('park')
 w(1)
 
-adb('shell', 'cmd', 'car_service', 'set-group-volume', '0', '1', '20')
 if DRY:
     json.dump(taps, open(CACHE, 'w'), ensure_ascii=False, indent=1)
 else:
-    json.dump({'scenes': scenes, 'facts': facts}, open(os.path.join(OUT, 'timeline.json'), 'w'), ensure_ascii=False, indent=1)
+    json.dump({'scenes': scenes, 'facts': facts, 'wav': EMU_WAV}, open(os.path.join(OUT, 'timeline.json'), 'w'), ensure_ascii=False, indent=1)
 print('facts', facts)
 print('합계', sum(x['dur'] for x in scenes))

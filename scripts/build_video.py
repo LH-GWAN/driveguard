@@ -2,7 +2,7 @@
 음악과 외부 소재를 넣지 않는다. 소리는 녹화에 담긴 앱 음성뿐이다. 화면을 줄여 위아래 띠에 자막을 넣어 앱 화면을 가리지 않는다."""
 import json, os, re, subprocess, sys
 sys.path.insert(0, os.path.dirname(__file__))
-import fix_audio
+import clean_audio, fix_audio
 
 V, O = sys.argv[1], sys.argv[2]
 OUT = os.path.join(V, 'out')
@@ -154,7 +154,11 @@ for it in items:
         src = os.path.join(V, 'clips', name + '.webm')
         dur = round(min(s['dur'], duration(src)), 3)
         fixed = os.path.join(OUT, name + '_audio.wav')
-        print(name, '메운 끊김', fix_audio.main(src, fixed), flush=True)
+        if d.get('wav') and os.path.exists(d['wav']):
+            # 에뮬레이터 오디오 출력(WAV)에서 같은 소리를 찾아 녹화 시각에 놓는다. 녹화 소리의 끊김·튐이 없다.
+            clean_audio.place(src, d['wav'], s['wav_from'], fixed, report=lambda r: print(name, '소리 구간(시작, 끝, 일치도, 출처)', r, flush=True))
+        else:
+            print(name, '메운 끊김', fix_audio.main(src, fixed), flush=True)
         inp = ['-i', src, '-i', fixed]
         caps = s['caps']
         # 멈춤 동안은 무음이라 대사 도중에 멈추면 소리가 끊긴다. 대사 중간이면 멈춤을 대사 시작 직전으로 옮긴다.

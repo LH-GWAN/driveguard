@@ -23,6 +23,10 @@ reset_alerts(); app(); w(3)
 for t in ['건강 정보(병력', '응답 확인에 답이 없거나', '등록할 보호자에게']:
     tap(t); w(0.8)
 tap('동의하고 계속'); w(2)
+# 권한 안내 화면: 무엇을 허용하는지 읽은 뒤 계속
+if not tap('계속'):
+    swipe_up(); w(1); tap('계속')
+w(2)
 allow_all()
 tap('견본 채우기'); w(1)
 swipe_up(); swipe_up()

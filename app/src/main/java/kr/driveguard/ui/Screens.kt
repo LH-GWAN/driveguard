@@ -99,6 +99,21 @@ fun ConsentScreen(onAgree: () -> Unit) {
     }
 }
 
+/** 시스템 권한 창을 띄우기 직전에 무엇을 왜 허용하는지 알린다. 실제로 요청하는 런타임 권한 네 가지와 순서가 같다. */
+@Composable
+fun PermissionScreen(onContinue: () -> Unit) {
+    Page {
+        Title(stringResource(R.string.perm_title))
+        Body(stringResource(R.string.perm_intro))
+        Body(stringResource(R.string.perm_speed))
+        Body(stringResource(R.string.perm_mic))
+        Body(stringResource(R.string.perm_notify))
+        Body(stringResource(R.string.perm_location))
+        Note(stringResource(R.string.perm_install))
+        Primary(stringResource(R.string.perm_next), onClick = onContinue)
+    }
+}
+
 @Composable
 fun SetupScreen(app: App, canGoBack: Boolean, onDone: () -> Unit) {
     val settings = app.settings

@@ -38,6 +38,8 @@ class MainActivity : ComponentActivity() {
                             },
                         )
                     }
+                    // 권한 안내 화면 다음에 갈 곳. 동의 직후면 사전 입력, 켜기 버튼에서 왔으면 메인 화면.
+                    var afterPermissions by remember { mutableStateOf(Route.SETUP) }
                     val rescue = view.state == RescueState.RESCUE
                     val shown = if (rescue) Route.RESCUE else route
                     // 건강 정보가 보이는 화면만 화면 캡처를 막는다.
@@ -48,8 +50,13 @@ class MainActivity : ComponentActivity() {
                     when (shown) {
                         Route.CONSENT -> ConsentScreen {
                             app.settings.consented = true
+                            afterPermissions = Route.SETUP
+                            route = if (missingPermissions().isEmpty()) Route.SETUP else Route.PERMISSIONS
+                        }
+                        Route.PERMISSIONS -> PermissionScreen {
                             requestRuntimePermissions()
-                            route = Route.SETUP
+                            if (afterPermissions == Route.HOME) startForegroundService(Intent(this@MainActivity, RescueService::class.java))
+                            route = afterPermissions
                         }
                         Route.SETUP -> SetupScreen(
                             app = app,
@@ -60,7 +67,14 @@ class MainActivity : ComponentActivity() {
                             app = app,
                             view = view,
                             permissionsMissing = missingPermissions().isNotEmpty(),
-                            onStart = ::startRescueService,
+                            onStart = {
+                                if (missingPermissions().isEmpty()) {
+                                    startRescueService()
+                                } else {
+                                    afterPermissions = Route.HOME
+                                    route = Route.PERMISSIONS
+                                }
+                            },
                             onStop = ::stopRescueService,
                             onEdit = { route = Route.SETUP },
                             onDeleted = { route = Route.CONSENT },
@@ -92,7 +106,7 @@ class MainActivity : ComponentActivity() {
 
     private fun missingPermissions() = RUNTIME_PERMISSIONS.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
 
-    private enum class Route { CONSENT, SETUP, HOME, RESCUE }
+    private enum class Route { CONSENT, PERMISSIONS, SETUP, HOME, RESCUE }
 
     private companion object {
         val RUNTIME_PERMISSIONS = listOf(
